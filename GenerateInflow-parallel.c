@@ -7,9 +7,9 @@
 #include <string>
 #include <unistd.h>
 #include <fftw3.h>
-#include <fftw3-mpi.h>
-#include <mpi.h>
 #include <time.h>
+#include <mpi.h>
+#include <fftw3-mpi.h>
 
 #include <vector>
 #include "petscvec.h"
@@ -103,7 +103,7 @@ PetscReal Z_intp=0.0; //
 double PI=3.14159265359;
 
 PetscInt Nt_LES=1200; //28800; //28800;
-PetscReal dt_LES = 0.005; 
+PetscReal dt_LES = 0.01; 
 int Nx_LES=128, Ny_LES=92;
 
 PetscInt save_inflow_period=1000;
@@ -146,21 +146,11 @@ PetscReal constant_shear = 0.5010;
 PetscInt Ny_AvgIn=25;
 
 PetscInt Geninflow=1;
-// Orientation option:
-// 0: original behavior (streamwise = z component, vertical = Y_LES (j-direction))
-// 1: streamwise = x component (mean/profile put in x; turbulence components remapped so synthetic U->x, V->y, W->z)
-// NOTE: orientation=1 does NOT change which geometric array is treated as vertical for profiles (still Y_LES) because Z_LES is zero.
-PetscInt orientation = 0;
 int main(int argc, char **argv) 
 {
-	clock_t start_time, end_time;
-    double cpu_time_used;
-    
-    // Start timing
-    start_time = clock();
 
 	PetscInitialize(&argc, &argv, (char *)0, help);
-	fftw_mpi_init();   /* must be called after MPI_Init (done inside PetscInitialize) */
+	fftw_mpi_init();
 
 	//PetscBool	flg;
 	PetscTruth  flg;
@@ -243,13 +233,6 @@ int main(int argc, char **argv)
 
   	PetscOptionsGetInt(PETSC_NULL, "-Ny_AvgIn", &Ny_AvgIn, &flg);
   	PetscOptionsGetInt(PETSC_NULL, "-Geninflow", &Geninflow, &flg);
-	PetscOptionsGetInt(PETSC_NULL, "-orientation", &orientation, &flg);
-
-	if (orientation != 0 && orientation != 1) {
-		printf("Unsupported orientation=%d (allowed 0 or 1). Falling back to 0.\n", orientation);
-		orientation = 0;
-	}
-	printf("Orientation=%d (0: streamwise=z, 1: streamwise=x)\n", orientation);
 
 
 
@@ -257,6 +240,10 @@ int main(int argc, char **argv)
 
 	ustar = ustar / V_ref;
 	ustar4mean = ustar4mean / V_ref;
+
+	// Nondimensional time step used in inflow filenames and time-based options
+	double T_ref = L_ref / V_ref;
+	double dt_LES_scaled = dt_LES / T_ref;
 
 	z0 = z0 / L_ref;
   
@@ -341,76 +328,35 @@ int main(int argc, char **argv)
 
 
 	double tmp, x,y,z;
-	
-	if (orientation == 1) {
-		// For orientation=1: streamwise=x, so inlet plane is y-z
-		// Read same file structure but interpret coordinates differently
-		
-		for(i=0;i<Nx_LES-1;i++) {
-		        fscanf(fd, "%le %le %le \n", &x, &tmp, &tmp);  // Read first column as y-coordinate
-			for (j=0;j<Ny_LES-1;j++) {
-				Y_LES[j][i]=x;  // Assign to Y_LES (was X_LES in original)
-			} 
-		}
-
-		for(j=0;j<Ny_LES-1;j++) {
-		        fscanf(fd, "%le %le %le \n", &tmp, &y, &tmp);  // Read second column as z-coordinate
-			for (i=0;i<Nx_LES-1;i++) {
-				Z_LES[j][i]=y;  // Assign to Z_LES (was Y_LES in original)
-			} 
-			//printf("Z1=%le \n", z);
-		}
-		
-		// Set X_LES to 0 (streamwise direction for inlet)
-		for(j=0;j<Ny_LES-1;j++) {
-		for (i=0;i<Nx_LES-1;i++) {
-			X_LES[j][i]=0.0;
-		} 
-		}
-		
-		// Adjust coordinate origin for orientation=1
-		double YY_base=Y_LES[0][0];
-		double ZZ_base=Z_LES[0][0];
-		for(i=0;i<Nx_LES-1;i++) {
+	for(i=0;i<Nx_LES-1;i++) {
+	        fscanf(fd, "%le %le %le \n", &x, &tmp, &tmp);
 		for (j=0;j<Ny_LES-1;j++) {
-				Y_LES[j][i]-=YY_base;
-				Z_LES[j][i]-=ZZ_base;
+			X_LES[j][i]=x;
 		} 
-		}
-		
-	} else {
-		// Original behavior: streamwise=z, inlet plane is x-y
-		for(i=0;i<Nx_LES-1;i++) {
-		        fscanf(fd, "%le %le %le \n", &x, &tmp, &tmp);
-			for (j=0;j<Ny_LES-1;j++) {
-				X_LES[j][i]=x;
-			} 
-		}
+	}
 
-		for(j=0;j<Ny_LES-1;j++) {
-		        fscanf(fd, "%le %le %le \n", &tmp, &y, &tmp);
-			for (i=0;i<Nx_LES-1;i++) {
-				Y_LES[j][i]=y;
-			} 
-			//printf("Y1=%le \n", y);
-		}
-
-		// Adjust coordinate origin for orientation=0
-		double XX=X_LES[0][0];
-		double YY=Y_LES[0][0];
-		for(i=0;i<Nx_LES-1;i++) {
-		for (j=0;j<Ny_LES-1;j++) {
-				X_LES[j][i]-=XX;
-				Y_LES[j][i]-=YY;
-		} 
-		}
-
-		// Set Z_LES to 0 (streamwise direction for inlet)
-		for(j=0;j<Ny_LES-1;j++) {
+	for(j=0;j<Ny_LES-1;j++) {
+	        fscanf(fd, "%le %le %le \n", &tmp, &y, &tmp);
 		for (i=0;i<Nx_LES-1;i++) {
-			Z_LES[j][i]=0.0;
+			Y_LES[j][i]=y;
 		} 
-		}
+		//printf("Y1=%le \n", y);
+	}
+
+	double XX=X_LES[0][0];
+	double YY=Y_LES[0][0];
+	for(i=0;i<Nx_LES-1;i++) {
+	for (j=0;j<Ny_LES-1;j++) {
+			X_LES[j][i]-=XX;
+			Y_LES[j][i]-=YY;
+	} 
+	}
+
+
+	for(j=0;j<Ny_LES-1;j++) {
+	for (i=0;i<Nx_LES-1;i++) {
+		Z_LES[j][i]=0.0;
+	} 
 	}
 
 
@@ -418,7 +364,6 @@ int main(int argc, char **argv)
 
 
 	printf("Y1=%le, Y2=%le \n", Y_LES[Ny_LES-3][0], Y_LES[0][0]);
-	printf("Ymin = %f, Ymax = %f\n", Y_LES[0][0], Y_LES[Ny_LES-1][0]); 
 
 	if (Geninflow) {
 
@@ -437,21 +382,11 @@ int main(int argc, char **argv)
         	printf("Read Mean Inflow file\n");
 		for (j=0;j<Ny_AvgIn;j++) {
         	 	fscanf(fd, "%le %le \n", &Y_AvgIn[j], &W_AvgIn[j]);
-	}
+		}
 
-	fclose(fd);
-	
-	// Debug: Print coordinate mapping info
-	printf("Coordinate mapping for orientation=%d:\n", orientation);
-	if (orientation == 1) {
-		printf("  Streamwise=x, Inlet plane=y-z\n");
-		printf("  Sample coordinates: Y_LES[0][0]=%le, Z_LES[0][0]=%le, X_LES[0][0]=%le\n", 
-		       Y_LES[0][0], Z_LES[0][0], X_LES[0][0]);
-	} else {
-		printf("  Streamwise=z, Inlet plane=x-y\n");
-		printf("  Sample coordinates: X_LES[0][0]=%le, Y_LES[0][0]=%le, Z_LES[0][0]=%le\n", 
-		       X_LES[0][0], Y_LES[0][0], Z_LES[0][0]);
-	}		if (Temperature) {
+        	fclose(fd);
+
+		if (Temperature) {
         	sprintf(filen, "Tavg_In.dat");
         	fd = fopen(filen, "r");
         	printf("Read Mean Inflow file Temperature\n");
@@ -510,12 +445,8 @@ int main(int argc, char **argv)
 
 	}
 
-	
 
 
-
-	double T_ref=L_ref/V_ref;
-	double dt_LES_scaled=dt_LES/T_ref;
 
 	// Read LES Grid
 	//
@@ -592,16 +523,8 @@ int main(int argc, char **argv)
 	       	for (i=0; i<Nx_LES-1; i++) { 
 
 
-			// Map inlet coordinates to synthetic turbulence coordinates
-			if (orientation==1) {
-				// For orientation=1: inlet y-z maps to synthetic y-z (same mapping)
-				X1_LES[j][i]=fmod(Y_LES[j][i],Lx);  // inlet Y -> synthetic X
-				Y1_LES[j][i]=fmod(Z_LES[j][i],Ly);  // inlet Z -> synthetic Y
-			} else {
-				// Original mapping
-				X1_LES[j][i]=fmod(X_LES[j][i],Lx);
-				Y1_LES[j][i]=fmod(Y_LES[j][i],Ly);
-			}
+			X1_LES[j][i]=fmod(X_LES[j][i],Lx);
+			Y1_LES[j][i]=fmod(Y_LES[j][i],Ly);
 
 			int ii, jj, kk;
 			for (jj=1;jj<Ny;jj++) {
@@ -625,153 +548,114 @@ int main(int argc, char **argv)
 		printf("t_LES %d \n", t_LES);
 
 		int jfix;
-				for(j=Ny_LES-2;j>=0;j--)
-				for(i=0;i<Nx_LES-1;i++) {
-					if (InletProfile==1) {
-						// Uniform velocity profile with orientation support
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						if (orientation==1) {
-							ucat[j][i].x = w_inlet;  // streamwise in x
-							ucat[j][i].y = u_inlet;  // spanwise in y
-						} else {
-							ucat[j][i].x = u_inlet;  // spanwise in x (original)
-							ucat[j][i].z = w_inlet;  // streamwise in z (original)
-						}
-					}
-					else if (InletProfile==2) {
-						// Logarithmic profile with orientation support
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						double vertical_coord = (orientation==1) ? Z_LES[j][i] : Y_LES[j][i];
-						double Umean = (vertical_coord <= z0) ? 0.0 : ustar4mean*log(vertical_coord/z0)/0.4;
-						if (orientation==1) {
-							ucat[j][i].x = Umean;  // streamwise in x
-						} else {
-							ucat[j][i].z = Umean;  // streamwise in z (original)
-						}
-					}
-					else if (InletProfile==3) {
-						// Interpolated profile from file with orientation support
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						int jj; 
-						double Umean = 0.0;
-						double vertical_coord = (orientation==1) ? Z_LES[j][i] : Y_LES[j][i];
-						for(jj=0;jj<Ny_AvgIn-1; jj++) {
-							if (vertical_coord>=Y_AvgIn[jj] && vertical_coord<=Y_AvgIn[jj+1]) {
-								double fac1=(Y_AvgIn[jj+1]-vertical_coord)/(Y_AvgIn[jj+1]-Y_AvgIn[jj]);
-								double fac2=(-Y_AvgIn[jj]+vertical_coord)/(Y_AvgIn[jj+1]-Y_AvgIn[jj]);
-								Umean = W_AvgIn[jj]*fac1+W_AvgIn[jj+1]*fac2;
-								if (Temperature) Tmprt[j][i]=T_AvgIn[jj]*fac1+T_AvgIn[jj+1]*fac2;
-							}
-						}
-						if (orientation==1) {
-							ucat[j][i].x = Umean;  // streamwise in x
-						} else {
-							ucat[j][i].z = Umean;  // streamwise in z (original)
-						}
-					}
-					else if (InletProfile==4) {
-						// Linear shear profile with orientation support
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						double vertical_coord = (orientation==1) ? Z_LES[j][i] : Y_LES[j][i];
-						double vertical_base = (orientation==1) ? Z_LES[0][i] : Y_LES[0][i];
-						double Umean = U0 + constant_shear * (vertical_coord - vertical_base);
-						if (orientation==1) {
-							ucat[j][i].x = Umean;  // streamwise in x
-						} else {
-							ucat[j][i].z = Umean;  // streamwise in z (original)
-						}
-					}
-					else if (InletProfile==5) {
-						// Power-law boundary layer profile with orientation support
-						double vertical_coord = (orientation==1) ? Z_LES[j][i] : Y_LES[j][i];
-						double Umean = Ue*pow(vertical_coord/h_bl,alfa_bl);
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						if (orientation==1) {
-							ucat[j][i].x = Umean; // streamwise in x
-						} else {
-							ucat[j][i].z = Umean; // original streamwise in z
-						}
-					}
-					
-					// Debug: Print sample velocity for middle point (all profiles)
-					if (j == (Ny_LES-1)/2 && i == (Nx_LES-1)/2) {
-						printf("Profile %d sample: ucat[%d][%d] = (%le, %le, %le)\n", 
-						       InletProfile, j, i, ucat[j][i].x, ucat[j][i].y, ucat[j][i].z);
-					}
-					else if (InletProfile==6) {
-						// Logarithmic profile with temperature sources and orientation support
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						double vertical_coord = (orientation==1) ? Z_LES[j][i] : Y_LES[j][i];
-						double Umean = (vertical_coord <= z0) ? 0.0 : ustar4mean*log(vertical_coord/z0)/0.4;
-						if (orientation==1) {
-							ucat[j][i].x = Umean;  // streamwise in x
-						} else {
-							ucat[j][i].z = Umean;  // streamwise in z (original)
-						}
-						if (Temperature) {
-							double rx, ry;
-							if (orientation==1) {
-								// For orientation=1, interpret x0_temperature as y-coordinate and y0_temperature as z-coordinate
-								rx=fabs(Y_LES[j][i]-x0_temperature);  
-								ry=fabs(Z_LES[j][i]-y0_temperature);  
-							} else {
-								rx=fabs(X_LES[j][i]-x0_temperature);
-								ry=fabs(Y_LES[j][i]-y0_temperature);
-							}
-							if (rx<r_temperature && ry<r_temperature) Tmprt[j][i]=inlet_temperature; 
-						}
-						if (Temperature1) {
-							double rx, ry;
-							if (orientation==1) {
-								rx=fabs(Y_LES[j][i]-x01_temperature);
-								ry=fabs(Z_LES[j][i]-y01_temperature);
-							} else {
-								rx=fabs(X_LES[j][i]-x01_temperature);
-								ry=fabs(Y_LES[j][i]-y01_temperature);
-							}
-							if (rx<r1_temperature && ry<r1_temperature) Tmprt1[j][i]=inlet1_temperature; 
-						}
-						if (Temperature2) {
-							double rx, ry;
-							if (orientation==1) {
-								rx=fabs(Y_LES[j][i]-x02_temperature);
-								ry=fabs(Z_LES[j][i]-y02_temperature);
-							} else {
-								rx=fabs(X_LES[j][i]-x02_temperature);
-								ry=fabs(Y_LES[j][i]-y02_temperature);
-							}
-							if (rx<r2_temperature && ry<r2_temperature) Tmprt2[j][i]=inlet2_temperature; 
-						}
-						if (Temperature3) {
-							double rx, ry;
-							if (orientation==1) {
-								rx=fabs(Y_LES[j][i]-x03_temperature);
-								ry=fabs(Z_LES[j][i]-y03_temperature);
-							} else {
-								rx=fabs(X_LES[j][i]-x03_temperature);
-								ry=fabs(Y_LES[j][i]-y03_temperature);
-							}
-							if (rx<r3_temperature && ry<r3_temperature) Tmprt3[j][i]=inlet3_temperature; 
-						}
-					}
-					else if (InletProfile==7) {
-						// File-based profile with periodic disturbance and orientation support
-						ucat[j][i].x=0.0; ucat[j][i].y=0.0; ucat[j][i].z=0.0;
-						if (orientation==1) {
-							// Map file components to new orientation
-							ucat[j][i].x = ucat0[j][i].z;  // streamwise: file_z -> x
-							ucat[j][i].y = ucat0[j][i].x;  // spanwise: file_x -> y  
-							ucat[j][i].z = ucat0[j][i].y;  // vertical: file_y -> z
-							if (PeriodicDisturb) ucat[j][i].x += umag_Disturb*sin(omega_Disturb*t_LES*dt_LES_scaled);
-						} else {
-							// Original mapping
-							ucat[j][i].x = ucat0[j][i].x;
-							ucat[j][i].y = ucat0[j][i].y;
-							ucat[j][i].z = ucat0[j][i].z;
-							if (PeriodicDisturb) ucat[j][i].z += umag_Disturb*sin(omega_Disturb*t_LES*dt_LES_scaled);
-						}
+                for(j=Ny_LES-2;j>=0;j--)
+                for(i=0;i<Nx_LES-1;i++) {
+			if (InletProfile==1) {
+				ucat[j][i].x=u_inlet;
+				ucat[j][i].y=0.0;
+				ucat[j][i].z=w_inlet;
+			} 
+			else if (InletProfile==2) {
+				ucat[j][i].x=0.0;
+				ucat[j][i].y=0.0;
+				if (j==0) ucat[j][i].z=0.0;
+				else ucat[j][i].z=ustar4mean*log(Y_LES[j][i]/z0)/0.4;
+
+				//double Ulinear = ustar4mean * Y_LES[j][i]/z0;
+
+				//if (j!=Ny_LES-2 && ucat[j][i].z < Ulinear && ucat[j+1][i].z > Ulinear ) jfix = j;
+
+				//if (j<=jfix) ucat[j][i].z = Ulinear;
+			}	
+			else if (InletProfile==3) {
+				ucat[j][i].x=0.0;
+				ucat[j][i].y=0.0;
+				int jj;
+				for(jj=0;jj<Ny_AvgIn-1; jj++) {
+					if (Y_LES[j][i]>=Y_AvgIn[jj] && Y_LES[j][i]<=Y_AvgIn[jj+1]) {
+						double fac1=(Y_AvgIn[jj+1]-Y_LES[j][i])/(Y_AvgIn[jj+1]-Y_AvgIn[jj]);
+						double fac2=(-Y_AvgIn[jj]+Y_LES[j][i])/(Y_AvgIn[jj+1]-Y_AvgIn[jj]);
+						ucat[j][i].z=W_AvgIn[jj]*fac1+W_AvgIn[jj+1]*fac2;
+
+						if (Temperature) Tmprt[j][i]=T_AvgIn[jj]*fac1+T_AvgIn[jj+1]*fac2;
 					}
 				}
+			}
+			else if (InletProfile==4) {
+				ucat[j][i].x=0.0;
+				ucat[j][i].y=0.0;
+				ucat[j][i].z=U0 + constant_shear * (Y_LES[j][i]-Y_LES[0][i]);
+
+				//double Ulinear = ustar4mean * Y_LES[j][i]/z0;
+
+				//if (j!=Ny_LES-2 && ucat[j][i].z < Ulinear && ucat[j+1][i].z > Ulinear ) jfix = j;
+
+				//if (j<=jfix) ucat[j][i].z = Ulinear;
+			}	
+
+			else if (InletProfile==5) {
+				ucat[j][i].x=0.0;
+				ucat[j][i].y=0.0;
+				ucat[j][i].z=Ue*pow(Y_LES[j][i]/h_bl,alfa_bl);
+
+				//double Ulinear = ustar4mean * Y_LES[j][i]/z0;
+
+				//if (j!=Ny_LES-2 && ucat[j][i].z < Ulinear && ucat[j+1][i].z > Ulinear ) jfix = j;
+
+				//if (j<=jfix) ucat[j][i].z = Ulinear;
+			}	
+
+			else if (InletProfile==6) {
+				ucat[j][i].x=0.0;
+				ucat[j][i].y=0.0;
+				if (j==0) ucat[j][i].z=0.0;
+				else ucat[j][i].z=ustar4mean*log(Y_LES[j][i]/z0)/0.4;
+
+				if (Temperature) {
+					double rx=fabs(X_LES[j][i]-x0_temperature);
+					double ry=fabs(Y_LES[j][i]-y0_temperature);
+
+					if (rx<r_temperature && ry<r_temperature) Tmprt[j][i]=inlet_temperature; 
+				}
+
+				if (Temperature1) {
+					double rx=fabs(X_LES[j][i]-x01_temperature);
+					double ry=fabs(Y_LES[j][i]-y01_temperature);
+
+					if (rx<r1_temperature && ry<r1_temperature) Tmprt1[j][i]=inlet1_temperature; 
+				}
+
+
+				if (Temperature2) {
+					double rx=fabs(X_LES[j][i]-x02_temperature);
+					double ry=fabs(Y_LES[j][i]-y02_temperature);
+
+					if (rx<r2_temperature && ry<r2_temperature) Tmprt2[j][i]=inlet2_temperature; 
+				}
+
+				if (Temperature3) {
+					double rx=fabs(X_LES[j][i]-x03_temperature);
+					double ry=fabs(Y_LES[j][i]-y03_temperature);
+
+					if (rx<r3_temperature && ry<r3_temperature) Tmprt3[j][i]=inlet3_temperature; 
+				}
+
+
+
+			}	
+
+
+			else if (InletProfile==7) {
+				ucat[j][i].x=ucat0[j][i].x;
+				ucat[j][i].y=ucat0[j][i].y;
+				ucat[j][i].z=ucat0[j][i].z;
+				if (PeriodicDisturb) {
+					ucat[j][i].z+=umag_Disturb*sin(omega_Disturb*t_LES*dt_LES_scaled);
+				}
+			}
+
+
+		}
 
 		/*
                 for(j=1;j<Ny_LES-1;j++)
@@ -793,14 +677,7 @@ int main(int argc, char **argv)
 			Uz_Convective=0.0;
 			for(j=0;j<Ny_LES-1;j++)
 			for(i=0;i<Nx_LES-1;i++) {
-				// Get streamwise component based on orientation for ALL profiles
-				double Umean_stream;
-				if (orientation==1) {
-					Umean_stream = ucat[j][i].x; // streamwise is x
-				} else {
-					Umean_stream = ucat[j][i].z; // streamwise is z (original)
-				}
-				Uz_Convective+=Umean_stream*fac_Uz/V_ref;
+				Uz_Convective+=ucat[j][i].z*fac_Uz/V_ref;
 			}
 
 			//}
@@ -825,8 +702,8 @@ int main(int argc, char **argv)
 			printf("****** X0=%le  \n", X[0]);
 			printf("****** X1=%le  \n", X[Nx-1]);
 
-			        for(j=0;j<Ny_LES-1;j++)
-			                for(i=0;i<Nx_LES-1;i++) {
+        	        for(j=0;j<Ny_LES-1;j++)
+	                for(i=0;i<Nx_LES-1;i++) {
 				double fac_11=(XX_intp-X[II_intp-1])/(X[II_intp]-X[II_intp-1]);
 				double fac_22=(-XX_intp+X[II_intp])/(X[II_intp]-X[II_intp-1]);
 
@@ -847,44 +724,24 @@ int main(int argc, char **argv)
 			//	printf("X_syn1=%le, X_LES=%le X_syn2=%le\n", Y[ii+1], X_LES[j][i], Y[ii] );			
 			//	printf("Y_syn1=%le, Y_LES=%le Y_syn2=%le\n", Z[jj+1], Y_LES[j][i], Z[jj] );			
 
-double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(V,jj+1,ii,II_intp-1)+fac1*UVWF(V,jj+1,ii+1,II_intp-1));
-			double uu2=fac4*(fac2*UVWF(V,jj,ii,II_intp)+fac1*UVWF(V,jj,ii+1,II_intp))+fac3*(fac2*UVWF(V,jj+1,ii,II_intp)+fac1*UVWF(V,jj+1,ii+1,II_intp));
+				double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(V,jj+1,ii,II_intp-1)+fac1*UVWF(V,jj+1,ii+1,II_intp-1));
+				double uu2=fac4*(fac2*UVWF(V,jj,ii,II_intp)  +fac1*UVWF(V,jj,ii+1,II_intp))  +fac3*(fac2*UVWF(V,jj+1,ii,II_intp)  +fac1*UVWF(V,jj+1,ii+1,II_intp));
 	
-			double vv1=fac4*(fac2*UVWF(W,jj,ii,II_intp-1)+fac1*UVWF(W,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(W,jj+1,ii,II_intp-1)+fac1*UVWF(W,jj+1,ii+1,II_intp-1));
-			double vv2=fac4*(fac2*UVWF(W,jj,ii,II_intp)+fac1*UVWF(W,jj,ii+1,II_intp))+fac3*(fac2*UVWF(W,jj+1,ii,II_intp)+fac1*UVWF(W,jj+1,ii+1,II_intp));
+				double vv1=fac4*(fac2*UVWF(W,jj,ii,II_intp-1)+fac1*UVWF(W,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(W,jj+1,ii,II_intp-1)+fac1*UVWF(W,jj+1,ii+1,II_intp-1));
+				double vv2=fac4*(fac2*UVWF(W,jj,ii,II_intp)  +fac1*UVWF(W,jj,ii+1,II_intp))  +fac3*(fac2*UVWF(W,jj+1,ii,II_intp)  +fac1*UVWF(W,jj+1,ii+1,II_intp));
 	
-			double ww1=fac4*(fac2*UVWF(U,jj,ii,II_intp-1)+fac1*UVWF(U,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(U,jj+1,ii,II_intp-1)+fac1*UVWF(U,jj+1,ii+1,II_intp-1));
-			double ww2=fac4*(fac2*UVWF(U,jj,ii,II_intp)+fac1*UVWF(U,jj,ii+1,II_intp))+fac3*(fac2*UVWF(U,jj+1,ii,II_intp)+fac1*UVWF(U,jj+1,ii+1,II_intp));
+				double ww1=fac4*(fac2*UVWF(U,jj,ii,II_intp-1)+fac1*UVWF(U,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(U,jj+1,ii,II_intp-1)+fac1*UVWF(U,jj+1,ii+1,II_intp-1));
+				double ww2=fac4*(fac2*UVWF(U,jj,ii,II_intp)  +fac1*UVWF(U,jj,ii+1,II_intp))  +fac3*(fac2*UVWF(U,jj+1,ii,II_intp)  +fac1*UVWF(U,jj+1,ii+1,II_intp));
 
 			//	printf("fac_11=%le, fac_22=%le \n", fac_11, fac_22);			
 			//	printf("uu1=%le, uu2=%le \n", uu1, uu2);			
 			//	printf("vv1=%le, vv2=%le \n", vv1, vv2);			
 			//	printf("ww1=%le, ww2=%le \n", ww1, ww2);			
 
-				// Check if point is below water surface (adjust for orientation)
-				int below_water = 1;
-				if (levelset) {
-					if (orientation==1) {
-						below_water = (Z_LES[j][i] < y_water);  // Z is vertical for orientation=1
-					} else {
-						below_water = (Y_LES[j][i] < y_water);  // Y is vertical for orientation=0
-					}
-				}
-				
-				if (!levelset || below_water) {
-					Cmpnts *Upt = &ucat[j][i];
-					// Apply turbulence mapping based on orientation for ALL profiles
-					if (orientation==1) {
-						// For orientation=1: synthetic U->x, V->y, W->z
-						Upt->x += fac_22*ww1+fac_11*ww2; // U (streamwise)
-						Upt->y += fac_22*uu1+fac_11*uu2; // V (spanwise)
-						Upt->z += fac_22*vv1+fac_11*vv2; // W (vertical)
-					} else {
-						// Original mapping: V->x, W->y, U->z
-						Upt->x += fac_22*uu1+fac_11*uu2; // V
-						Upt->y += fac_22*vv1+fac_11*vv2; // W
-						Upt->z += fac_22*ww1+fac_11*ww2; // U
-					}
+				if (!levelset || (levelset && Y_LES[j][i]<y_water) ) {
+					ucat[j][i].x+=fac_22*uu1+fac_11*uu2;
+					ucat[j][i].y+=fac_22*vv1+fac_11*vv2;
+					ucat[j][i].z+=fac_22*ww1+fac_11*ww2;
 				}
 			}
 
@@ -1106,9 +963,9 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 
 	}
 
-	} // End of if (Turb)
+	}
 
-	//  	Average 
+//  	Average 
 
 	std::vector< std::vector<Cmpnts> > U_g1 (Ny_LES);
 	for( j=0; j<Ny_LES; j++) U_g1[j].resize(Nx_LES);
@@ -1158,7 +1015,7 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 		}
 		int ti_name = ( ti2 / read_inflow_period ) * read_inflow_period + 1;
 
-		sprintf(fname_g1, "%s/inflow_%06d_dt=%g.dat", path, ti_name, dt_LES);
+		sprintf(fname_g1, "%s/inflow_%06d_dt=%g.dat", path, ti_name, dt_LES_scaled);
 
 		if(ti2==0 || (ti2>90 && ti2%read_inflow_period==1) ) {
 		
@@ -1190,28 +1047,22 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
  		U_g1[j][i].y/=(double)Nt_LES;
  		U_g1[j][i].z/=(double)Nt_LES;
 		uu_g1[j][i]/=(double)Nt_LES;
-		//uu_g1[j][i]-=0.0; //U_g1[j][i].x*U_g1[j][i].x; 
-		uu_g1[j][i]-=U_g1[j][i].x*U_g1[j][i].x; 
+		uu_g1[j][i]-=0.0; //U_g1[j][i].x*U_g1[j][i].x; 
 
 		vv_g1[j][i]/=(double)Nt_LES;
-		//vv_g1[j][i]-=0.0; //U_g1[j][i].y*U_g1[j][i].y;
-		vv_g1[j][i]-=U_g1[j][i].y*U_g1[j][i].y;
+		vv_g1[j][i]-=0.0; //U_g1[j][i].y*U_g1[j][i].y;
 
 		ww_g1[j][i]/=(double)Nt_LES;
-		//ww_g1[j][i]-=1.0; //U_g1[j][i].z*U_g1[j][i].z;
-		ww_g1[j][i]-=U_g1[j][i].z*U_g1[j][i].z;
+		ww_g1[j][i]-=1.0; //U_g1[j][i].z*U_g1[j][i].z;
 
 		uv_g1[j][i]/=(double)Nt_LES;
-		//uv_g1[j][i]-=0.0; //U_g1[j][i].x*U_g1[j][i].y;
-		uv_g1[j][i]-=U_g1[j][i].x*U_g1[j][i].y;
+		uv_g1[j][i]-=0.0; //U_g1[j][i].x*U_g1[j][i].y;
 
 		vw_g1[j][i]/=(double)Nt_LES;
-		//vw_g1[j][i]-=0.0; //U_g1[j][i].y*U_g1[j][i].z;
-		vw_g1[j][i]-=U_g1[j][i].y*U_g1[j][i].z;
+		vw_g1[j][i]-=0.0; //U_g1[j][i].y*U_g1[j][i].z;
 
 		wu_g1[j][i]/=(double)Nt_LES;
-		//wu_g1[j][i]-=0.0; //U_g1[j][i].z*U_g1[j][i].x;
-		wu_g1[j][i]-=U_g1[j][i].z*U_g1[j][i].x;
+		wu_g1[j][i]-=0.0; //U_g1[j][i].z*U_g1[j][i].x;
 	}
 
 	FILE *f_avg;
@@ -1222,7 +1073,7 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 
 	f_avg = fopen(filen_avg, "w");
 	fprintf(f_avg, "Variables=x,y,z,U,V,W,uu,vv,ww,uv,vw,wu\n");
-	fprintf(f_avg, "ustar=%f,D_coef=%f,L_coef=%f, Gamma=%f, Y_loc=%f, Ue=%f, alfa_bl=%f\n", ustar, D_coef, L_coef, Gamma, Y_loc, Ue, alfa_bl);
+
 	fprintf(f_avg, "ZONE T='QUADRILATERAL', N=%d, E=%d, F=FEBLOCK, ET=QUADRILATERAL, VARLOCATION=([1-12]=NODAL)\n", (Nx_LES-1)*(Ny_LES-1), (Nx_LES-2)*(Ny_LES-2));
 
 	for (j=0;j<Ny_LES-1;j++)
@@ -1297,6 +1148,7 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 	
 
 
+	/* U, V, W are now flat arrays allocated in GenerateTurb */
 	free(U);
 	free(V);
 	free(W);
@@ -1304,11 +1156,6 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 	free(X);
 	free(Y);
 	free(Z);
-
-	end_time = clock();
-    cpu_time_used = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("Program execution time: %.2f seconds\n", cpu_time_used);
-
 
 	PetscFinalize();
 }
@@ -1321,9 +1168,7 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 
 
 
-
-
-
+/* GenerateTurb__ â€” dead backup function, body removed to avoid duplication */
 void GenerateTurb( ) 
 {
   
@@ -1692,6 +1537,7 @@ void GenerateTurb( )
 	fftw_free(CKw_o);
 
 }
+
 
 
 

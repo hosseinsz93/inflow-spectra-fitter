@@ -1,4 +1,4 @@
-﻿static char help[] = "Testing programming!";
+static char help[] = "Testing programming!";
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -7,8 +7,6 @@
 #include <string>
 #include <unistd.h>
 #include <fftw3.h>
-#include <fftw3-mpi.h>
-#include <mpi.h>
 #include <time.h>
 
 #include <vector>
@@ -50,8 +48,7 @@ typedef struct {
 } Cmpnts;
 
 
-double *U, *V, *W;   /* flat contiguous: index = i + Nx*(j + Ny*k) */
-#define UVWF(A,k_,j_,i_) ((A)[(i_)+Nx*((j_)+Ny*(k_))])
+double ***U, ***V, ***W;
 double *X, *Y, *Z;
 int **i_intp, **j_intp, **k_intp;
 
@@ -160,7 +157,6 @@ int main(int argc, char **argv)
     start_time = clock();
 
 	PetscInitialize(&argc, &argv, (char *)0, help);
-	fftw_mpi_init();   /* must be called after MPI_Init (done inside PetscInitialize) */
 
 	//PetscBool	flg;
 	PetscTruth  flg;
@@ -847,14 +843,14 @@ int main(int argc, char **argv)
 			//	printf("X_syn1=%le, X_LES=%le X_syn2=%le\n", Y[ii+1], X_LES[j][i], Y[ii] );			
 			//	printf("Y_syn1=%le, Y_LES=%le Y_syn2=%le\n", Z[jj+1], Y_LES[j][i], Z[jj] );			
 
-double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(V,jj+1,ii,II_intp-1)+fac1*UVWF(V,jj+1,ii+1,II_intp-1));
-			double uu2=fac4*(fac2*UVWF(V,jj,ii,II_intp)+fac1*UVWF(V,jj,ii+1,II_intp))+fac3*(fac2*UVWF(V,jj+1,ii,II_intp)+fac1*UVWF(V,jj+1,ii+1,II_intp));
+				double uu1=fac4*(fac2*V[jj][ii][II_intp-1]+fac1*V[jj][ii+1][II_intp-1])+fac3*(fac2*V[jj+1][ii][II_intp-1]+fac1*V[jj+1][ii+1][II_intp-1]);
+				double uu2=fac4*(fac2*V[jj][ii][II_intp]+fac1*V[jj][ii+1][II_intp])+fac3*(fac2*V[jj+1][ii][II_intp]+fac1*V[jj+1][ii+1][II_intp]);
 	
-			double vv1=fac4*(fac2*UVWF(W,jj,ii,II_intp-1)+fac1*UVWF(W,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(W,jj+1,ii,II_intp-1)+fac1*UVWF(W,jj+1,ii+1,II_intp-1));
-			double vv2=fac4*(fac2*UVWF(W,jj,ii,II_intp)+fac1*UVWF(W,jj,ii+1,II_intp))+fac3*(fac2*UVWF(W,jj+1,ii,II_intp)+fac1*UVWF(W,jj+1,ii+1,II_intp));
+				double vv1=fac4*(fac2*W[jj][ii][II_intp-1]+fac1*W[jj][ii+1][II_intp-1])+fac3*(fac2*W[jj+1][ii][II_intp-1]+fac1*W[jj+1][ii+1][II_intp-1]);
+				double vv2=fac4*(fac2*W[jj][ii][II_intp]+fac1*W[jj][ii+1][II_intp])+fac3*(fac2*W[jj+1][ii][II_intp]+fac1*W[jj+1][ii+1][II_intp]);
 	
-			double ww1=fac4*(fac2*UVWF(U,jj,ii,II_intp-1)+fac1*UVWF(U,jj,ii+1,II_intp-1))+fac3*(fac2*UVWF(U,jj+1,ii,II_intp-1)+fac1*UVWF(U,jj+1,ii+1,II_intp-1));
-			double ww2=fac4*(fac2*UVWF(U,jj,ii,II_intp)+fac1*UVWF(U,jj,ii+1,II_intp))+fac3*(fac2*UVWF(U,jj+1,ii,II_intp)+fac1*UVWF(U,jj+1,ii+1,II_intp));
+				double ww1=fac4*(fac2*U[jj][ii][II_intp-1]+fac1*U[jj][ii+1][II_intp-1])+fac3*(fac2*U[jj+1][ii][II_intp-1]+fac1*U[jj+1][ii+1][II_intp-1]);
+				double ww2=fac4*(fac2*U[jj][ii][II_intp]+fac1*U[jj][ii+1][II_intp])+fac3*(fac2*U[jj+1][ii][II_intp]+fac1*U[jj+1][ii+1][II_intp]);
 
 			//	printf("fac_11=%le, fac_22=%le \n", fac_11, fac_22);			
 			//	printf("uu1=%le, uu2=%le \n", uu1, uu2);			
@@ -1297,9 +1293,12 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 	
 
 
-	free(U);
-	free(V);
-	free(W);
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		free(U[j][i]);
+		free(V[j][i]);
+		free(W[j][i]);
+	}
 
 	free(X);
 	free(Y);
@@ -1321,72 +1320,131 @@ double uu1=fac4*(fac2*UVWF(V,jj,ii,II_intp-1)+fac1*UVWF(V,jj,ii+1,II_intp-1))+fa
 
 
 
-
-
-
-void GenerateTurb( ) 
+void GenerateTurb__( ) 
 {
   
 	int t,k,j,i;
 
-	/* MPI info */
-	int rank, nprocs;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-
 	double TC11, TC12, TC13, TC21, TC22, TC23, TC31, TC32, TC33;
 
 	double *Kx, *Ky, *Kz;
+//	double *X, *Y, *Z;
 
 	double C11, C12, C13, C21, C22, C23, C31, C32, C33;
+//	double ***U, ***V, ***W;
+	double ***U_i, ***V_i, ***W_i;
+	double ***n1_Gauss, ***n2_Gauss, ***n3_Gauss; 
+	double ***Divg_k;
+	double ***Divg;
+	
 
-	/* ---- Distributed FFT sizing ---- */
-	ptrdiff_t N0 = Nz, N1 = Ny, N2 = Nx;
-	ptrdiff_t local_n0, local_0_start, alloc_local;
-	alloc_local = fftw_mpi_local_size_3d(N0, N1, N2, MPI_COMM_WORLD,
-	                                      &local_n0, &local_0_start);
-	if (rank == 0)
-		printf("Rank %d: local_n0=%td  local_0_start=%td  alloc_local=%td\n",
-		       rank, local_n0, local_0_start, alloc_local);
+	double ***dUdx, ***dVdy, ***dWdz;
+	double ***dUdx_i, ***dVdy_i, ***dWdz_i;
 
-	size_t nloc = (size_t)local_n0 * Ny * Nx;   /* elements in local slab */
+/*
+	Ly=fabs(X_LES[1][1][Nx_LES-1]-X_LES[1][1][1]);
+	Lz=fabs(Y_LES[1][Ny_LES-1][1]-Y_LES[1][1][1]);
+//	Lx=fabs(Z_LES[Nz_LES-1][1][1]-Z_LES[1][1][1]);
+	Lx=4.0*Ly;
+
+//	Nx=Nz_LES-2;
+	Ny=Nx_LES-2;
+	Nz=Ny_LES-2;
+	Nx=4*Ny;
+
+	Y_loc=0.1*Lz;
+*/
 
 	Kx = (double*) malloc(sizeof(double)*Nx);
 	Ky = (double*) malloc(sizeof(double)*Ny);
 	Kz = (double*) malloc(sizeof(double)*Nz);
-	if (!Kx || !Ky || !Kz) { fprintf(stderr,"malloc Kx/Ky/Kz failed\n"); MPI_Abort(MPI_COMM_WORLD,1); }
 
 	X = (double*) malloc(sizeof(double)*Nx);
 	Y = (double*) malloc(sizeof(double)*Ny);
 	Z = (double*) malloc(sizeof(double)*Nz);
-	if (!X || !Y || !Z) { fprintf(stderr,"malloc X/Y/Z failed\n"); MPI_Abort(MPI_COMM_WORLD,1); }
 
-	/* Local-slab temporary arrays (noise, divergence, derivatives) */
-	double *n1_Gauss = (double*) malloc(nloc*sizeof(double));
-	double *n2_Gauss = (double*) malloc(nloc*sizeof(double));
-	double *n3_Gauss = (double*) malloc(nloc*sizeof(double));
-	double *Divg_k   = (double*) malloc(nloc*sizeof(double));
-	double *Divg     = (double*) malloc(nloc*sizeof(double));
-	double *U_i      = (double*) malloc(nloc*sizeof(double));
-	double *V_i      = (double*) malloc(nloc*sizeof(double));
-	double *W_i      = (double*) malloc(nloc*sizeof(double));
-	double *dUdx     = (double*) malloc(nloc*sizeof(double));
-	double *dVdy     = (double*) malloc(nloc*sizeof(double));
-	double *dWdz     = (double*) malloc(nloc*sizeof(double));
-	double *dUdx_i   = (double*) malloc(nloc*sizeof(double));
-	double *dVdy_i   = (double*) malloc(nloc*sizeof(double));
-	double *dWdz_i   = (double*) malloc(nloc*sizeof(double));
-	if (!n1_Gauss||!n2_Gauss||!n3_Gauss||!Divg_k||!Divg||
-	    !U_i||!V_i||!W_i||!dUdx||!dVdy||!dWdz||!dUdx_i||!dVdy_i||!dWdz_i) {
-		fprintf(stderr,"malloc local slab arrays failed\n");
-		MPI_Abort(MPI_COMM_WORLD,1);
+	U = (double***) malloc(sizeof(double)*Nz);
+	V = (double***) malloc(sizeof(double)*Nz);
+	W = (double***) malloc(sizeof(double)*Nz);
+
+	U_i = (double***) malloc(sizeof(double)*Nz);
+	V_i = (double***) malloc(sizeof(double)*Nz);
+	W_i = (double***) malloc(sizeof(double)*Nz);
+
+	n1_Gauss = (double***) malloc(sizeof(double)*Nz);
+	n2_Gauss = (double***) malloc(sizeof(double)*Nz);
+	n3_Gauss = (double***) malloc(sizeof(double)*Nz);
+
+	Divg_k = (double***) malloc(sizeof(double)*Nz);
+	Divg = (double***) malloc(sizeof(double)*Nz);
+
+
+	dUdx = (double***) malloc(sizeof(double)*Nz);
+	dVdy = (double***) malloc(sizeof(double)*Nz);
+	dWdz = (double***) malloc(sizeof(double)*Nz);
+
+	dUdx_i = (double***) malloc(sizeof(double)*Nz);
+	dVdy_i = (double***) malloc(sizeof(double)*Nz);
+	dWdz_i = (double***) malloc(sizeof(double)*Nz);
+
+
+	for(k=0;k<Nz;k++) {
+		U[k] = (double**) malloc(sizeof(double)*Ny);
+		V[k] = (double**) malloc(sizeof(double)*Ny);
+		W[k] = (double**) malloc(sizeof(double)*Ny);
+
+		U_i[k] = (double**) malloc(sizeof(double)*Ny);
+		V_i[k] = (double**) malloc(sizeof(double)*Ny);
+		W_i[k] = (double**) malloc(sizeof(double)*Ny);
+
+		n1_Gauss[k] = (double**) malloc(sizeof(double)*Ny);
+		n2_Gauss[k] = (double**) malloc(sizeof(double)*Ny);
+		n3_Gauss[k] = (double**) malloc(sizeof(double)*Ny);
+		Divg_k[k] = (double**) malloc(sizeof(double)*Ny);
+		Divg[k] = (double**) malloc(sizeof(double)*Ny);
+
+
+		dUdx[k] = (double**) malloc(sizeof(double)*Ny);
+		dVdy[k] = (double**) malloc(sizeof(double)*Ny);
+		dWdz[k] = (double**) malloc(sizeof(double)*Ny);
+
+		dUdx_i[k] = (double**) malloc(sizeof(double)*Ny);
+		dVdy_i[k] = (double**) malloc(sizeof(double)*Ny);
+		dWdz_i[k] = (double**) malloc(sizeof(double)*Ny);
+
 	}
 
-	/* Global output arrays â€” allocated on every rank; filled via MPI_Allreduce */
-	U = (double*) calloc((size_t)Nz*Ny*Nx, sizeof(double));
-	V = (double*) calloc((size_t)Nz*Ny*Nx, sizeof(double));
-	W = (double*) calloc((size_t)Nz*Ny*Nx, sizeof(double));
-	if (!U || !V || !W) { fprintf(stderr,"calloc U/V/W failed\n"); MPI_Abort(MPI_COMM_WORLD,1); }
+
+	for(k=0;k<Nz;k++) 
+	for(j=0;j<Ny;j++) {
+		U[k][j] = (double*) malloc(sizeof(double)*Nx);
+		V[k][j] = (double*) malloc(sizeof(double)*Nx);
+		W[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+		U_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		V_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		W_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+		n1_Gauss[k][j] = (double*) malloc(sizeof(double)*Nx);
+		n2_Gauss[k][j] = (double*) malloc(sizeof(double)*Nx);
+		n3_Gauss[k][j] = (double*) malloc(sizeof(double)*Nx);
+		Divg_k[k][j] = (double*) malloc(sizeof(double)*Nx);
+		Divg[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+
+		dUdx[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dVdy[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dWdz[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+		dUdx_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dVdy_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dWdz_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+
+	}
+
+
+
 
 	for(i=0;i<Nx/2+1;i++) {
 		Kx[i]=i*2.0*PI/Lx;
@@ -1412,74 +1470,85 @@ void GenerateTurb( )
 		Kz[k]=(k-Nz)*2.0*PI/Lz;
 	}
 
+
+//	Kx[Nx/2]=0.0;
+//	Ky[Ny/2]=0.0;
+//	Kz[Nz/2]=0.0;
+
+
 	double dy=Ly/(Ny-1);
-	for(j=0;j<Ny;j++) { Y[j]=double(j)*dy; }
+
+	for(j=0;j<Ny;j++) {
+		Y[j]=double(j)*dy;
+	}
 
 	double dx=Lx/(Nx-1);
-	for(i=0;i<Nx;i++) { X[i]=double(i)*dx; }
+
+	for(i=0;i<Nx;i++) {
+		X[i]=double(i)*dx;
+	}
 
 	double dz=Lz/(Nz-1);
-	for(k=0;k<Nz;k++) { Z[k]=double(k)*dz; }
 
-	/* Energy spectrum diagnostic (rank 0 only) */
-	if (rank == 0) {
-		FILE *f_tmp;
-		char fname_tmp[80];  
-		sprintf(fname_tmp, "E_k.dat");
-		f_tmp = fopen(fname_tmp, "w");
-		j=0; k=0;
-		for (i=0;i<Nx;i++) {
-			double K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+Kz[k]*Kz[k]);
-			double fac1 = D_coef*ustar*ustar/pow(Y_loc,2.0/3.0);
-			double L = L_coef*Y_loc;
-			double fac2 = pow(L,5.0/3.0);
-			double fac3 = pow(L,4)*pow(K,4)/pow((1+pow(L,2)*pow(K,2)),17.0/6.0);
-			double E=  fac1 * fac2 * fac3;
-			fprintf( f_tmp, "%le %le \n", K, E );
-		}
-		fclose(f_tmp);
+	for(k=0;k<Nz;k++) {
+		Z[k]=double(k)*dz;
 	}
 
-	/* Fill local Gaussian noise slab */
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;
-		for(j=0;j<Ny;j++) 
-		for(i=0;i<Nx;i++) {
-			ptrdiff_t id = i + Nx*(j + Ny*kk);
-			n1_Gauss[id] = randn_notrig();
-			n2_Gauss[id] = randn_notrig();
-			n3_Gauss[id] = randn_notrig();
-			Divg_k[id]   = 0.0;
-		}
+
+        FILE *f_tmp;
+        char fname_tmp[80];  
+        sprintf(fname_tmp, "E_k.dat");
+        f_tmp = fopen(fname_tmp, "w");
+	j=0; k=0;
+	for (i=0;i<Nx;i++) {
+
+		double K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+Kz[k]*Kz[k]);
+		double fac=1.0/(sqrt(4.0*PI)*K*K+1.e-9);
+		double fac1 = D_coef*ustar*ustar/pow(Y_loc,2.0/3.0);
+		double L = L_coef*Y_loc;
+		double fac2 = pow(L,5.0/3.0);
+		double fac3 = pow(L,4)*pow(K,4)/pow((1+pow(L,2)*pow(K,2)),17.0/6.0);
+
+		double E=  fac1 * fac2 * fac3;   // alpha * e^2/3 *  L^5/3 *  L^4 k^4 / (1+L^2K^2)^(17/6) 
+		
+		double FF=E;
+        	fprintf( f_tmp, "%le %le \n", K, FF );
 	}
 
-	/* Allocate FFTW MPI complex buffers */
+
+	fclose(f_tmp);
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		n1_Gauss[k][j][i] = randn_notrig();
+		n2_Gauss[k][j][i] = randn_notrig();
+		n3_Gauss[k][j][i] = randn_notrig();
+		Divg_k[k][j][i] = 0.0;
+	}
+	
+
 	fftw_complex *CKu, *CKv, *CKw;
 	fftw_complex *CKu_o, *CKv_o, *CKw_o;
 
-	CKu   = fftw_alloc_complex(alloc_local);
-	CKu_o = fftw_alloc_complex(alloc_local);
-	CKv   = fftw_alloc_complex(alloc_local);
-	CKv_o = fftw_alloc_complex(alloc_local);
-	CKw   = fftw_alloc_complex(alloc_local);
-	CKw_o = fftw_alloc_complex(alloc_local);
-	if (!CKu||!CKu_o||!CKv||!CKv_o||!CKw||!CKw_o) {
-		fprintf(stderr,"fftw_alloc_complex failed\n");
-		MPI_Abort(MPI_COMM_WORLD,1);
-	}
+	CKu = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKu_o = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKv = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKv_o = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKw = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKw_o = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
 
-	/* Create MPI-distributed FFT plans */
+
 	fftw_plan pu, pv, pw;
-	pu = fftw_mpi_plan_dft_3d(N0, N1, N2, CKu, CKu_o, MPI_COMM_WORLD, FFTW_BACKWARD, FFTW_ESTIMATE);
-	pv = fftw_mpi_plan_dft_3d(N0, N1, N2, CKv, CKv_o, MPI_COMM_WORLD, FFTW_BACKWARD, FFTW_ESTIMATE);
-	pw = fftw_mpi_plan_dft_3d(N0, N1, N2, CKw, CKw_o, MPI_COMM_WORLD, FFTW_BACKWARD, FFTW_ESTIMATE);
 
-	/* Fill local k-space slab */
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;  /* local row index */
-		for(j=0;j<Ny;j++) 
-		for(i=0;i<Nx;i++) {
+	pu=fftw_plan_dft_3d(Nz, Ny, Nx, CKu, CKu_o, FFTW_BACKWARD, FFTW_ESTIMATE);
+	pv=fftw_plan_dft_3d(Nz, Ny, Nx, CKv, CKv_o, FFTW_BACKWARD, FFTW_ESTIMATE);
+	pw=fftw_plan_dft_3d(Nz, Ny, Nx, CKw, CKw_o, FFTW_BACKWARD, FFTW_ESTIMATE);
 
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
 			double K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+Kz[k]*Kz[k]);
 			double fac=1.0/(sqrt(4.0*PI)*K*K);
 			double fac1 = D_coef*ustar*ustar/pow(Y_loc,2.0/3.0);
@@ -1487,38 +1556,55 @@ void GenerateTurb( )
 			double fac2 = pow(L,5.0/3.0);
 			double fac3 = pow(L,4)*pow(K,4)/pow((1+pow(L,2)*pow(K,2)),17.0/6.0);
 
-			double E=  fac1 * fac2 * fac3;
+			double E=  fac1 * fac2 * fac3;   // alpha * e^2/3 *  L^5/3 *  L^4 k^4 / (1+L^2K^2)^(17/6) 
 
 			double dkx=2*PI/Lx, dky=2*PI/Ly, dkz=2*PI/Lz;
+		
 			double fac4=sqrt(dkx*dky*dkz);
+
 			double facc = fac4*sqrt(E)*fac;
+
 			if (fabs(K)<1.e-20) facc=0.0;
 
 			C11=0.0; C22=0.0; C33=0.0; 
+
 			C12=facc * Kz[k] ; C13=-facc * Ky[j] ; 
 			C21=-facc * Kz[k] ; C23=facc * Kx[i] ; 
 			C31=facc * Ky[j] ; C32=-facc * Kx[i] ; 
 
 			Beta=Gamma*(ustar/Karman_const/Y_loc)*pow((K*L+1.e-9),-2.0/3.0);
+
 			double K30=Kz[k];
 			double K3=K30-Beta*Kx[i];
+
 			double K0=K;
 			K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+K3*K3);
 
 			double C1=Beta*pow(Kx[i],2)*(pow(K0,2)-2*pow(K30,2)+Beta*Kx[i]*K30)/(pow(K,2)*(pow(Kx[i],2)+pow(Ky[j],2))+1.e-9);
+
 			double tmp=atan(Beta*Kx[i]*sqrt(pow(Kx[i],2)+pow(Ky[j],2))/(pow(K0,2)-K30*Kx[i]*Beta+1.e-9));
 			double C2=Ky[j]*pow(K0,2)*tmp/(pow(pow(Kx[i],2)+pow(Ky[j],2),3.0/2.0)+1.e-9);
 
 			double zeta1=C1-Ky[j]*C2/(Kx[i]+1.e-9);
+
 			double zeta2=Ky[j]*C1/(Kx[i]+1.e-9)+C2;
 
-			TC11=1.0; TC12=0.0; TC13=zeta1;
-			TC21=0.0; TC22=1.0; TC23=zeta2;
-			TC31=0.0; TC32=0.0; TC33=pow(K0,2)/(pow(K,2)+1.e-9);
+			TC11=1.0;
+			TC12=0.0;
+			TC13=zeta1;
+
+			TC21=0.0;
+			TC22=1.0;
+			TC23=zeta2;
+
+			TC31=0.0;
+			TC32=0.0;
+			TC33=pow(K0,2)/(pow(K,2)+1.e-9);
 
 			double C11_tmp=C11, C12_tmp=C12, C13_tmp=C13;
 			double C21_tmp=C21, C22_tmp=C22, C23_tmp=C23;
 			double C31_tmp=C31, C32_tmp=C32, C33_tmp=C33;
+
 
 			C11=TC11*C11_tmp+TC12*C21_tmp+TC13*C31_tmp;
 			C12=TC11*C12_tmp+TC12*C22_tmp+TC13*C32_tmp;
@@ -1532,157 +1618,945 @@ void GenerateTurb( )
 			C32=TC31*C12_tmp+TC32*C22_tmp+TC33*C32_tmp;
 			C33=TC31*C13_tmp+TC32*C23_tmp+TC33*C33_tmp;
 
-			/* local flat index inside the FFTW MPI buffer (row-major: k-dim is distributed) */
-			ptrdiff_t id = i + N2*(j + N1*kk);
-			ptrdiff_t id_noise = i + Nx*(j + Ny*kk);
+//             		an array of rank d whose dimensions are n0 × n1 × n2 ×· · · × nd−1
+//  			id−1 + nd−1 (id−2 + nd−2 (. . . + n1 i0 ))
 
-			CKu[id][0]=C11*n1_Gauss[id_noise]+C12*n2_Gauss[id_noise]+C13*n3_Gauss[id_noise];
+			int id=i+Nx*(j+Ny*k);
+
+			CKu[id][0]=C11*n1_Gauss[k][j][i]+C12*n2_Gauss[k][j][i]+C13*n3_Gauss[k][j][i];
 			CKu[id][1]=0.0;
-			CKv[id][0]=C21*n1_Gauss[id_noise]+C22*n2_Gauss[id_noise]+C23*n3_Gauss[id_noise];
+			CKv[id][0]=C21*n1_Gauss[k][j][i]+C22*n2_Gauss[k][j][i]+C23*n3_Gauss[k][j][i];
 			CKv[id][1]=0.0;
-			CKw[id][0]=C31*n1_Gauss[id_noise]+C32*n2_Gauss[id_noise]+C33*n3_Gauss[id_noise];
+			CKw[id][0]=C31*n1_Gauss[k][j][i]+C32*n2_Gauss[k][j][i]+C33*n3_Gauss[k][j][i];
+			CKw[id][1]=0.0;
+
+/*
+			double Kx_00=Nx*PI*2.0/Lx/3.0;
+			double Ky_00=Ny*PI*2.0/Ly/3.0;
+			double Kz_00=Nz*PI*2.0/Lz/3.0;
+			if((fabs(Kx[i])-Kx_00)>1.e-19 || (fabs(Ky[j])-Ky_00)>1.e-19 || (fabs(Kz[k])-Kz_00)>1.e-19) {
+
+				CKu[id][0]=0.0;
+				CKv[id][0]=0.0;
+				CKw[id][0]=0.0;
+			}
+*/
+
+	}
+
+	double kDivg_Max=0.0;
+	double kDivg_Min=1.0e20;
+	double kDivg_Sum=0.0;
+
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+		Divg_k[k][j][i] = CKu[id][0]*Kx[i]+CKv[id][0]*Ky[j]+CKw[id][0]*Kz[k];
+		kDivg_Sum+=fabs(Divg_k[k][j][i]);
+		if ((fabs(Divg_k[k][j][i])-kDivg_Max)>1.e-20) kDivg_Max=fabs(Divg_k[k][j][i]);
+		if ((fabs(Divg_k[k][j][i])-kDivg_Min)<1.e-20) kDivg_Min=fabs(Divg_k[k][j][i]);
+	}
+	
+	printf("the Maximum Divergence is %le \n", kDivg_Max);
+	printf("the Minimum Divergence is %le \n", kDivg_Min);
+	printf("the Average Divergence is %le \n", kDivg_Sum/(Nx*Ny*Nz));
+	
+
+	fftw_execute(pu); 
+	fftw_execute(pv); 
+	fftw_execute(pw); 
+
+
+	double fac_111=1.0;
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+	 	U[k][j][i] = CKu_o[id][0]*fac_111;
+	 	V[k][j][i] = CKv_o[id][0]*fac_111;
+	 	W[k][j][i] = CKw_o[id][0]*fac_111;
+	 	U_i[k][j][i] = CKu_o[id][1]*fac_111;
+	 	V_i[k][j][i] = CKv_o[id][1]*fac_111;
+	 	W_i[k][j][i] = CKw_o[id][1]*fac_111;
+	}
+
+
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+		CKu[id][1]=CKu[id][0]*Kx[i];
+		CKv[id][1]=CKv[id][0]*Ky[j];
+		CKw[id][1]=CKw[id][0]*Kz[k];
+		
+		CKu[id][0]=0.0;
+		CKv[id][0]=0.0;
+		CKw[id][0]=0.0;
+
+/*
+		double Kx_00=Nx*PI*2.0/Lx/3.0;
+		double Ky_00=Ny*PI*2.0/Ly/3.0;
+		double Kz_00=Nz*PI*2.0/Lz/3.0;
+		if((fabs(Kx[i])-Kx_00)>1.e-19 || (fabs(Ky[j])-Ky_00)>1.e-19 || (fabs(Kz[k])-Kz_00)>1.e-19) {
+
+			CKu[id][1]=0.0;
+			CKv[id][1]=0.0;
 			CKw[id][1]=0.0;
 		}
+
+*/
 	}
 
-	/* k-space divergence check (local slab, then MPI reduce) */
-	double kDivg_Max_loc=0.0, kDivg_Min_loc=1.0e20, kDivg_Sum_loc=0.0;
 
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;
-		for(j=0;j<Ny;j++) 
-		for(i=0;i<Nx;i++) {
-			ptrdiff_t id      = i + N2*(j + N1*kk);
-			ptrdiff_t id_loc  = i + Nx*(j + Ny*kk);
-			Divg_k[id_loc] = CKu[id][0]*Kx[i]+CKv[id][0]*Ky[j]+CKw[id][0]*Kz[k];
-			kDivg_Sum_loc+=fabs(Divg_k[id_loc]);
-			if (fabs(Divg_k[id_loc]) > kDivg_Max_loc) kDivg_Max_loc = fabs(Divg_k[id_loc]);
-			if (fabs(Divg_k[id_loc]) < kDivg_Min_loc) kDivg_Min_loc = fabs(Divg_k[id_loc]);
-		}
-	}
-
-	double kDivg_Max, kDivg_Min, kDivg_Sum;
-	MPI_Reduce(&kDivg_Max_loc, &kDivg_Max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-	MPI_Reduce(&kDivg_Min_loc, &kDivg_Min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-	MPI_Reduce(&kDivg_Sum_loc, &kDivg_Sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-	if (rank == 0) {
-		printf("the Maximum k-Divergence is %le \n", kDivg_Max);
-		printf("the Minimum k-Divergence is %le \n", kDivg_Min);
-		printf("the Average k-Divergence is %le \n", kDivg_Sum/(Nx*Ny*Nz));
-	}
-
-	/* First FFT: velocity components */
-	fftw_execute(pu); 
-	fftw_execute(pv); 
-	fftw_execute(pw); 
-
-	/* Extract real parts into local slab, then gather to global U/V/W */
-	double fac_111=1.0;
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;
-		for(j=0;j<Ny;j++) 
-		for(i=0;i<Nx;i++) {
-			ptrdiff_t id_fftw = i + N2*(j + N1*kk);
-			ptrdiff_t id_glob = i + Nx*(j + Ny*k);   /* global index in U/V/W */
-			U[id_glob] = CKu_o[id_fftw][0]*fac_111;
-			V[id_glob] = CKv_o[id_fftw][0]*fac_111;
-			W[id_glob] = CKw_o[id_fftw][0]*fac_111;
-			U_i[i + Nx*(j + Ny*kk)] = CKu_o[id_fftw][1]*fac_111;
-			V_i[i + Nx*(j + Ny*kk)] = CKv_o[id_fftw][1]*fac_111;
-			W_i[i + Nx*(j + Ny*kk)] = CKw_o[id_fftw][1]*fac_111;
-		}
-	}
-
-	/* All ranks need the full U/V/W for interpolation in main() */
-	MPI_Allreduce(MPI_IN_PLACE, U, (int)(Nz*Ny*Nx), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-	MPI_Allreduce(MPI_IN_PLACE, V, (int)(Nz*Ny*Nx), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-	MPI_Allreduce(MPI_IN_PLACE, W, (int)(Nz*Ny*Nx), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-	/* Prepare derivative FFTs: multiply k-space by wavenumber */
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;
-		for(j=0;j<Ny;j++) 
-		for(i=0;i<Nx;i++) {
-			ptrdiff_t id = i + N2*(j + N1*kk);
-			CKu[id][1]=CKu[id][0]*Kx[i];
-			CKv[id][1]=CKv[id][0]*Ky[j];
-			CKw[id][1]=CKw[id][0]*Kz[k];
-			CKu[id][0]=0.0;
-			CKv[id][0]=0.0;
-			CKw[id][0]=0.0;
-		}
-	}
 
 	fftw_execute(pu); 
 	fftw_execute(pv); 
 	fftw_execute(pw); 
 
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;
-		for(j=0;j<Ny;j++) 
-		for(i=0;i<Nx;i++) {
-			ptrdiff_t id_fftw = i + N2*(j + N1*kk);
-			ptrdiff_t id_loc  = i + Nx*(j + Ny*kk);
-			dUdx  [id_loc] = CKu_o[id_fftw][0]*fac_111;
-			dVdy  [id_loc] = CKv_o[id_fftw][0]*fac_111;
-			dWdz  [id_loc] = CKw_o[id_fftw][0]*fac_111;
-			dUdx_i[id_loc] = CKu_o[id_fftw][1]*fac_111;
-			dVdy_i[id_loc] = CKv_o[id_fftw][1]*fac_111;
-			dWdz_i[id_loc] = CKw_o[id_fftw][1]*fac_111;
-		}
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+	 	dUdx[k][j][i] = CKu_o[id][0]*fac_111;
+	 	dVdy[k][j][i] = CKv_o[id][0]*fac_111;
+	 	dWdz[k][j][i] = CKw_o[id][0]*fac_111;
+	 	dUdx_i[k][j][i] = CKu_o[id][1]*fac_111;
+	 	dVdy_i[k][j][i] = CKv_o[id][1]*fac_111;
+	 	dWdz_i[k][j][i] = CKw_o[id][1]*fac_111;
 	}
+
 
 	fftw_destroy_plan(pu);
 	fftw_destroy_plan(pv);
 	fftw_destroy_plan(pw);
 
-	/* Physical-space divergence check (local slab, then MPI reduce) */
-	for(k=0;k<(int)nloc;k++) Divg[k] = 0.0;
 
-	double Divg_Max_loc=0.0, Divg_Min_loc=1.0e20, Divg_Sum_loc=0.0;
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		Divg[k][j][i] = 0.0;
+	}
+	
+	double Divg_Max=0.0;
+	double Divg_Min=1.0e20;
+	double Divg_Sum=0.0;
 
-	/* Only interior points of the local slab (avoid boundary j,i) */
-	for(k=local_0_start; k<local_0_start+local_n0; k++) {
-		ptrdiff_t kk = k - local_0_start;
-		for(j=1;j<Ny-1;j++) 
-		for(i=1;i<Nx-1;i++) {
-			ptrdiff_t id_loc = i + Nx*(j + Ny*kk);
-			Divg[id_loc] = dUdx[id_loc]+dVdy[id_loc]+dWdz[id_loc];
-			Divg_Sum_loc+=fabs(Divg[id_loc]);
-			if (fabs(Divg[id_loc]) > Divg_Max_loc) Divg_Max_loc = fabs(Divg[id_loc]);
-			if (fabs(Divg[id_loc]) < Divg_Min_loc) Divg_Min_loc = fabs(Divg[id_loc]);
-		}
+	for(k=1;k<Nz-1;k++)
+	for(j=1;j<Ny-1;j++) 
+	for(i=1;i<Nx-1;i++) {
+//		Divg[k][j][i] = 0.5*(U[k][j][i+1]-U[k][j][i-1])/dx+0.5*(V[k][j+1][i]-V[k][j-1][i])/dy+0.5*(W[k+1][j][i]-W[k-1][j][i])/dz;
+		Divg[k][j][i] = dUdx[k][j][i]+dVdy[k][j][i]+dWdz[k][j][i];
+		Divg_Sum+=fabs(Divg[k][j][i]);
+		if ((fabs(Divg[k][j][i])-Divg_Max)>1.e-20) Divg_Max=fabs(Divg[k][j][i]);
+		if ((fabs(Divg[k][j][i])-Divg_Min)<1.e-20) Divg_Min=fabs(Divg[k][j][i]);
 	}
 
-	double Divg_Max, Divg_Min, Divg_Sum;
-	MPI_Reduce(&Divg_Max_loc, &Divg_Max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-	MPI_Reduce(&Divg_Min_loc, &Divg_Min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-	MPI_Reduce(&Divg_Sum_loc, &Divg_Sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-	if (rank == 0) {
-		printf("the Maximum Divergence is %le \n", Divg_Max);
-		printf("the Minimum Divergence is %le \n", Divg_Min);
-		printf("the Average Divergence is %le \n", Divg_Sum/(Nx*Ny*Nz));
-	}
+	printf("the Maximum Divergence is %le \n", Divg_Max);
+	printf("the Minimum Divergence is %le \n", Divg_Min);
+	printf("the Average Divergence is %le \n", Divg_Sum/(Nx*Ny*Nz));
+	
+	char filen[80];
+	sprintf(filen, "Turbulence%06d.plt", 0);
 
-	/* Free local temporaries */
+	INTEGER4 I, Debug, VIsDouble, DIsDouble, III, IMax, JMax, KMax;
+	VIsDouble = 0;
+	DIsDouble = 0;
+	Debug = 0;
+
+	double SolTime = 0.0;
+	INTEGER4 StrandID = 0; /* StaticZone */	
+	INTEGER4 ParentZn = 0;	
+	INTEGER4 TotalNumFaceNodes = 1; /* Not used for FEQuad zones*/
+	INTEGER4 NumConnectedBoundaryFaces = 1; /* Not used for FEQuad zones*/
+	INTEGER4 TotalNumBoundaryConnections = 1; /* Not used for FEQuad zones*/
+	INTEGER4 FileType = 0;
+
+
+	
+	/*I = TECINI112((char*)"Flow", (char*)"X Y Z U V W U_i V_i W_i Divg_k Divg", filen, (char*)".", &FileType, &Debug, &VIsDouble);
+
+	INTEGER4	ZoneType=0, ICellMax=0, JCellMax=0, KCellMax=0;
+	INTEGER4	IsBlock=1, NumFaceConnections=0, FaceNeighborMode=0;
+	INTEGER4    ShareConnectivityFromZone=0;
+	INTEGER4	LOC[40] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}; // 1 is cell-centered 0 is node centered 
+		
+
+	I = TECZNE112((char*)"Zone 1",
+                        &ZoneType,      // Ordered zone 
+                        &Nx,
+                        &Ny,
+                        &Nz,
+                        &ICellMax,
+                        &JCellMax,
+                        &KCellMax,
+                        &SolTime,
+                        &StrandID,
+			&ParentZn,
+			&IsBlock,
+			&NumFaceConnections,
+			&FaceNeighborMode,
+			&TotalNumFaceNodes,
+			&NumConnectedBoundaryFaces,
+			&TotalNumBoundaryConnections,
+			NULL,
+			LOC,
+			NULL,
+			&ShareConnectivityFromZone);
+
+	III = Nx*Ny*Nz;
+	
+	float *x;
+	x = new float [III];
+		
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = X[i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Y[j];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Z[k];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = U[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = V[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = W[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = U_i[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = V_i[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = W_i[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Divg_k[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Divg[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	I = TECEND112();*/
+
 	free(Kx);
 	free(Ky);
 	free(Kz);
+//	free(X);
+//	free(Y);
+//	free(Z);
 
-	free(n1_Gauss);
-	free(n2_Gauss);
-	free(n3_Gauss);
-	free(Divg_k);
-	free(Divg);
-	free(U_i);
-	free(V_i);
-	free(W_i);
-	free(dUdx);
-	free(dVdy);
-	free(dWdz);
-	free(dUdx_i);
-	free(dVdy_i);
-	free(dWdz_i);
+	for(k=0;k<Nz;k++) 
+	for(j=0;j<Ny;j++) {
+//		free(U[k][j]);
+//		free(V[k][j]);
+//		free(W[k][j]);
+
+		free(U_i[k][j]);
+		free(V_i[k][j]);
+		free(W_i[k][j]);
+
+		free(n1_Gauss[k][j]);
+		free(n2_Gauss[k][j]);
+		free(n3_Gauss[k][j]);
+
+		free(Divg_k[k][j]);
+		free(Divg[k][j]);
+
+
+		free(dUdx[k][j]);
+		free(dVdy[k][j]);
+		free(dWdz[k][j]);
+
+		free(dUdx_i[k][j]);
+		free(dVdy_i[k][j]);
+		free(dWdz_i[k][j]);
+
+	}
+
+
+	fftw_free(CKu);
+	fftw_free(CKu_o);
+	fftw_free(CKv);
+	fftw_free(CKv_o);
+	fftw_free(CKw);
+	fftw_free(CKw_o);
+
+}
+
+
+
+void GenerateTurb( ) 
+{
+  
+	int t,k,j,i;
+
+	double TC11, TC12, TC13, TC21, TC22, TC23, TC31, TC32, TC33;
+
+	double *Kx, *Ky, *Kz;
+//	double *X, *Y, *Z;
+
+	double C11, C12, C13, C21, C22, C23, C31, C32, C33;
+//	double ***U, ***V, ***W;
+	double ***U_i, ***V_i, ***W_i;
+	double ***n1_Gauss, ***n2_Gauss, ***n3_Gauss; 
+	double ***Divg_k;
+	double ***Divg;
+	
+
+	double ***dUdx, ***dVdy, ***dWdz;
+	double ***dUdx_i, ***dVdy_i, ***dWdz_i;
+
+/*
+	Ly=fabs(X_LES[1][1][Nx_LES-1]-X_LES[1][1][1]);
+	Lz=fabs(Y_LES[1][Ny_LES-1][1]-Y_LES[1][1][1]);
+//	Lx=fabs(Z_LES[Nz_LES-1][1][1]-Z_LES[1][1][1]);
+	Lx=4.0*Ly;
+
+//	Nx=Nz_LES-2;
+	Ny=Nx_LES-2;
+	Nz=Ny_LES-2;
+	Nx=4*Ny;
+
+	Y_loc=0.1*Lz;
+*/
+
+	Kx = (double*) malloc(sizeof(double)*Nx);
+	Ky = (double*) malloc(sizeof(double)*Ny);
+	Kz = (double*) malloc(sizeof(double)*Nz);
+
+	X = (double*) malloc(sizeof(double)*Nx);
+	Y = (double*) malloc(sizeof(double)*Ny);
+	Z = (double*) malloc(sizeof(double)*Nz);
+
+	U = (double***) malloc(sizeof(double)*Nz);
+	V = (double***) malloc(sizeof(double)*Nz);
+	W = (double***) malloc(sizeof(double)*Nz);
+
+	U_i = (double***) malloc(sizeof(double)*Nz);
+	V_i = (double***) malloc(sizeof(double)*Nz);
+	W_i = (double***) malloc(sizeof(double)*Nz);
+
+	n1_Gauss = (double***) malloc(sizeof(double)*Nz);
+	n2_Gauss = (double***) malloc(sizeof(double)*Nz);
+	n3_Gauss = (double***) malloc(sizeof(double)*Nz);
+
+	Divg_k = (double***) malloc(sizeof(double)*Nz);
+	Divg = (double***) malloc(sizeof(double)*Nz);
+
+
+	dUdx = (double***) malloc(sizeof(double)*Nz);
+	dVdy = (double***) malloc(sizeof(double)*Nz);
+	dWdz = (double***) malloc(sizeof(double)*Nz);
+
+	dUdx_i = (double***) malloc(sizeof(double)*Nz);
+	dVdy_i = (double***) malloc(sizeof(double)*Nz);
+	dWdz_i = (double***) malloc(sizeof(double)*Nz);
+
+
+	for(k=0;k<Nz;k++) {
+		U[k] = (double**) malloc(sizeof(double)*Ny);
+		V[k] = (double**) malloc(sizeof(double)*Ny);
+		W[k] = (double**) malloc(sizeof(double)*Ny);
+
+		U_i[k] = (double**) malloc(sizeof(double)*Ny);
+		V_i[k] = (double**) malloc(sizeof(double)*Ny);
+		W_i[k] = (double**) malloc(sizeof(double)*Ny);
+
+		n1_Gauss[k] = (double**) malloc(sizeof(double)*Ny);
+		n2_Gauss[k] = (double**) malloc(sizeof(double)*Ny);
+		n3_Gauss[k] = (double**) malloc(sizeof(double)*Ny);
+		Divg_k[k] = (double**) malloc(sizeof(double)*Ny);
+		Divg[k] = (double**) malloc(sizeof(double)*Ny);
+
+
+		dUdx[k] = (double**) malloc(sizeof(double)*Ny);
+		dVdy[k] = (double**) malloc(sizeof(double)*Ny);
+		dWdz[k] = (double**) malloc(sizeof(double)*Ny);
+
+		dUdx_i[k] = (double**) malloc(sizeof(double)*Ny);
+		dVdy_i[k] = (double**) malloc(sizeof(double)*Ny);
+		dWdz_i[k] = (double**) malloc(sizeof(double)*Ny);
+
+	}
+
+
+	for(k=0;k<Nz;k++) 
+	for(j=0;j<Ny;j++) {
+		U[k][j] = (double*) malloc(sizeof(double)*Nx);
+		V[k][j] = (double*) malloc(sizeof(double)*Nx);
+		W[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+		U_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		V_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		W_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+		n1_Gauss[k][j] = (double*) malloc(sizeof(double)*Nx);
+		n2_Gauss[k][j] = (double*) malloc(sizeof(double)*Nx);
+		n3_Gauss[k][j] = (double*) malloc(sizeof(double)*Nx);
+		Divg_k[k][j] = (double*) malloc(sizeof(double)*Nx);
+		Divg[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+
+		dUdx[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dVdy[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dWdz[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+		dUdx_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dVdy_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+		dWdz_i[k][j] = (double*) malloc(sizeof(double)*Nx);
+
+
+	}
+
+
+
+
+	for(i=0;i<Nx/2+1;i++) {
+		Kx[i]=i*2.0*PI/Lx;
+	}
+
+	for(j=0;j<Ny/2+1;j++) {
+		Ky[j]=j*2.0*PI/Ly;
+	}
+
+	for(k=0;k<Nz/2+1;k++) {
+		Kz[k]=k*2.0*PI/Lz;
+	}
+
+	for(i=Nx/2+1;i<Nx;i++) {
+		Kx[i]=(i-Nx)*2.0*PI/Lx;
+	}
+
+	for(j=Ny/2+1;j<Ny;j++) {
+		Ky[j]=(j-Ny)*2.0*PI/Ly;
+	}
+
+	for(k=Nz/2+1;k<Nz;k++) {
+		Kz[k]=(k-Nz)*2.0*PI/Lz;
+	}
+
+
+//	Kx[Nx/2]=0.0;
+//	Ky[Ny/2]=0.0;
+//	Kz[Nz/2]=0.0;
+
+
+	double dy=Ly/(Ny-1);
+
+	for(j=0;j<Ny;j++) {
+		Y[j]=double(j)*dy;
+	}
+
+	double dx=Lx/(Nx-1);
+
+	for(i=0;i<Nx;i++) {
+		X[i]=double(i)*dx;
+	}
+
+	double dz=Lz/(Nz-1);
+
+	for(k=0;k<Nz;k++) {
+		Z[k]=double(k)*dz;
+	}
+
+
+        FILE *f_tmp;
+        char fname_tmp[80];  
+        sprintf(fname_tmp, "E_k.dat");
+        f_tmp = fopen(fname_tmp, "w");
+	j=0; k=0;
+	for (i=0;i<Nx;i++) {
+
+		double K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+Kz[k]*Kz[k]);
+		double fac=1.0/(sqrt(4.0*PI)*K*K+1.e-9);
+		double fac1 = D_coef*ustar*ustar/pow(Y_loc,2.0/3.0);
+		double L = L_coef*Y_loc;
+		double fac2 = pow(L,5.0/3.0);
+		double fac3 = pow(L,4)*pow(K,4)/pow((1+pow(L,2)*pow(K,2)),17.0/6.0);
+
+		double E=  fac1 * fac2 * fac3;   // alpha * e^2/3 *  L^5/3 *  L^4 k^4 / (1+L^2K^2)^(17/6) 
+		
+		double FF=E;
+        	fprintf( f_tmp, "%le %le \n", K, FF );
+	}
+
+
+	fclose(f_tmp);
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		n1_Gauss[k][j][i] = randn_notrig();
+		n2_Gauss[k][j][i] = randn_notrig();
+		n3_Gauss[k][j][i] = randn_notrig();
+		Divg_k[k][j][i] = 0.0;
+	}
+	
+
+	fftw_complex *CKu, *CKv, *CKw;
+	fftw_complex *CKu_o, *CKv_o, *CKw_o;
+
+	CKu = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKu_o = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKv = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKv_o = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKw = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+	CKw_o = (fftw_complex*) fftw_malloc(Nx*Ny*Nz*sizeof(fftw_complex));
+
+
+	fftw_plan pu, pv, pw;
+
+	pu=fftw_plan_dft_3d(Nz, Ny, Nx, CKu, CKu_o, FFTW_BACKWARD, FFTW_ESTIMATE);
+	pv=fftw_plan_dft_3d(Nz, Ny, Nx, CKv, CKv_o, FFTW_BACKWARD, FFTW_ESTIMATE);
+	pw=fftw_plan_dft_3d(Nz, Ny, Nx, CKw, CKw_o, FFTW_BACKWARD, FFTW_ESTIMATE);
+
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+
+			double K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+Kz[k]*Kz[k]);
+			double fac=1.0/(sqrt(4.0*PI)*K*K);
+			double fac1 = D_coef*ustar*ustar/pow(Y_loc,2.0/3.0);
+			double L = L_coef*Y_loc;
+			double fac2 = pow(L,5.0/3.0);
+			double fac3 = pow(L,4)*pow(K,4)/pow((1+pow(L,2)*pow(K,2)),17.0/6.0);
+
+			double E=  fac1 * fac2 * fac3;   // alpha * e^2/3 *  L^5/3 *  L^4 k^4 / (1+L^2K^2)^(17/6) 
+
+			double dkx=2*PI/Lx, dky=2*PI/Ly, dkz=2*PI/Lz;
+		
+			double fac4=sqrt(dkx*dky*dkz);
+
+			double facc = fac4*sqrt(E)*fac;
+
+			if (fabs(K)<1.e-20) facc=0.0;
+
+			C11=0.0; C22=0.0; C33=0.0; 
+
+			C12=facc * Kz[k] ; C13=-facc * Ky[j] ; 
+			C21=-facc * Kz[k] ; C23=facc * Kx[i] ; 
+			C31=facc * Ky[j] ; C32=-facc * Kx[i] ; 
+
+			Beta=Gamma*(ustar/Karman_const/Y_loc)*pow((K*L+1.e-9),-2.0/3.0);
+
+			double K30=Kz[k];
+			double K3=K30-Beta*Kx[i];
+
+			double K0=K;
+			K = sqrt(Kx[i]*Kx[i]+Ky[j]*Ky[j]+K3*K3);
+
+			double C1=Beta*pow(Kx[i],2)*(pow(K0,2)-2*pow(K30,2)+Beta*Kx[i]*K30)/(pow(K,2)*(pow(Kx[i],2)+pow(Ky[j],2))+1.e-9);
+
+			double tmp=atan(Beta*Kx[i]*sqrt(pow(Kx[i],2)+pow(Ky[j],2))/(pow(K0,2)-K30*Kx[i]*Beta+1.e-9));
+			double C2=Ky[j]*pow(K0,2)*tmp/(pow(pow(Kx[i],2)+pow(Ky[j],2),3.0/2.0)+1.e-9);
+
+			double zeta1=C1-Ky[j]*C2/(Kx[i]+1.e-9);
+
+			double zeta2=Ky[j]*C1/(Kx[i]+1.e-9)+C2;
+
+			TC11=1.0;
+			TC12=0.0;
+			TC13=zeta1;
+
+			TC21=0.0;
+			TC22=1.0;
+			TC23=zeta2;
+
+			TC31=0.0;
+			TC32=0.0;
+			TC33=pow(K0,2)/(pow(K,2)+1.e-9);
+
+			double C11_tmp=C11, C12_tmp=C12, C13_tmp=C13;
+			double C21_tmp=C21, C22_tmp=C22, C23_tmp=C23;
+			double C31_tmp=C31, C32_tmp=C32, C33_tmp=C33;
+
+
+			C11=TC11*C11_tmp+TC12*C21_tmp+TC13*C31_tmp;
+			C12=TC11*C12_tmp+TC12*C22_tmp+TC13*C32_tmp;
+			C13=TC11*C13_tmp+TC12*C23_tmp+TC13*C33_tmp;
+
+			C21=TC21*C11_tmp+TC22*C21_tmp+TC23*C31_tmp;
+			C22=TC21*C12_tmp+TC22*C22_tmp+TC23*C32_tmp;
+			C23=TC21*C13_tmp+TC22*C23_tmp+TC23*C33_tmp;
+
+			C31=TC31*C11_tmp+TC32*C21_tmp+TC33*C31_tmp;
+			C32=TC31*C12_tmp+TC32*C22_tmp+TC33*C32_tmp;
+			C33=TC31*C13_tmp+TC32*C23_tmp+TC33*C33_tmp;
+
+//             		an array of rank d whose dimensions are n0 × n1 × n2 ×· · · × nd−1
+//  			id−1 + nd−1 (id−2 + nd−2 (. . . + n1 i0 ))
+
+			int id=i+Nx*(j+Ny*k);
+
+			CKu[id][0]=C11*n1_Gauss[k][j][i]+C12*n2_Gauss[k][j][i]+C13*n3_Gauss[k][j][i];
+			CKu[id][1]=0.0;
+			CKv[id][0]=C21*n1_Gauss[k][j][i]+C22*n2_Gauss[k][j][i]+C23*n3_Gauss[k][j][i];
+			CKv[id][1]=0.0;
+			CKw[id][0]=C31*n1_Gauss[k][j][i]+C32*n2_Gauss[k][j][i]+C33*n3_Gauss[k][j][i];
+			CKw[id][1]=0.0;
+
+/*
+			double Kx_00=Nx*PI*2.0/Lx/3.0;
+			double Ky_00=Ny*PI*2.0/Ly/3.0;
+			double Kz_00=Nz*PI*2.0/Lz/3.0;
+			if((fabs(Kx[i])-Kx_00)>1.e-19 || (fabs(Ky[j])-Ky_00)>1.e-19 || (fabs(Kz[k])-Kz_00)>1.e-19) {
+
+				CKu[id][0]=0.0;
+				CKv[id][0]=0.0;
+				CKw[id][0]=0.0;
+			}
+*/
+
+	}
+
+	double kDivg_Max=0.0;
+	double kDivg_Min=1.0e20;
+	double kDivg_Sum=0.0;
+
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+		Divg_k[k][j][i] = CKu[id][0]*Kx[i]+CKv[id][0]*Ky[j]+CKw[id][0]*Kz[k];
+		kDivg_Sum+=fabs(Divg_k[k][j][i]);
+		if ((fabs(Divg_k[k][j][i])-kDivg_Max)>1.e-20) kDivg_Max=fabs(Divg_k[k][j][i]);
+		if ((fabs(Divg_k[k][j][i])-kDivg_Min)<1.e-20) kDivg_Min=fabs(Divg_k[k][j][i]);
+	}
+	
+	printf("the Maximum Divergence is %le \n", kDivg_Max);
+	printf("the Minimum Divergence is %le \n", kDivg_Min);
+	printf("the Average Divergence is %le \n", kDivg_Sum/(Nx*Ny*Nz));
+	
+
+	fftw_execute(pu); 
+	fftw_execute(pv); 
+	fftw_execute(pw); 
+
+
+	double fac_111=1.0;
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+	 	U[k][j][i] = CKu_o[id][0]*fac_111;
+	 	V[k][j][i] = CKv_o[id][0]*fac_111;
+	 	W[k][j][i] = CKw_o[id][0]*fac_111;
+	 	U_i[k][j][i] = CKu_o[id][1]*fac_111;
+	 	V_i[k][j][i] = CKv_o[id][1]*fac_111;
+	 	W_i[k][j][i] = CKw_o[id][1]*fac_111;
+	}
+
+
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+		CKu[id][1]=CKu[id][0]*Kx[i];
+		CKv[id][1]=CKv[id][0]*Ky[j];
+		CKw[id][1]=CKw[id][0]*Kz[k];
+		
+		CKu[id][0]=0.0;
+		CKv[id][0]=0.0;
+		CKw[id][0]=0.0;
+
+/*
+		double Kx_00=Nx*PI*2.0/Lx/3.0;
+		double Ky_00=Ny*PI*2.0/Ly/3.0;
+		double Kz_00=Nz*PI*2.0/Lz/3.0;
+		if((fabs(Kx[i])-Kx_00)>1.e-19 || (fabs(Ky[j])-Ky_00)>1.e-19 || (fabs(Kz[k])-Kz_00)>1.e-19) {
+
+			CKu[id][1]=0.0;
+			CKv[id][1]=0.0;
+			CKw[id][1]=0.0;
+		}
+
+*/
+	}
+
+
+
+	fftw_execute(pu); 
+	fftw_execute(pv); 
+	fftw_execute(pw); 
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		int id=i+Nx*(j+Ny*k);
+	 	dUdx[k][j][i] = CKu_o[id][0]*fac_111;
+	 	dVdy[k][j][i] = CKv_o[id][0]*fac_111;
+	 	dWdz[k][j][i] = CKw_o[id][0]*fac_111;
+	 	dUdx_i[k][j][i] = CKu_o[id][1]*fac_111;
+	 	dVdy_i[k][j][i] = CKv_o[id][1]*fac_111;
+	 	dWdz_i[k][j][i] = CKw_o[id][1]*fac_111;
+	}
+
+
+	fftw_destroy_plan(pu);
+	fftw_destroy_plan(pv);
+	fftw_destroy_plan(pw);
+
+
+	for(k=0;k<Nz;k++)
+	for(j=0;j<Ny;j++) 
+	for(i=0;i<Nx;i++) {
+		Divg[k][j][i] = 0.0;
+	}
+	
+	double Divg_Max=0.0;
+	double Divg_Min=1.0e20;
+	double Divg_Sum=0.0;
+
+	for(k=1;k<Nz-1;k++)
+	for(j=1;j<Ny-1;j++) 
+	for(i=1;i<Nx-1;i++) {
+//		Divg[k][j][i] = 0.5*(U[k][j][i+1]-U[k][j][i-1])/dx+0.5*(V[k][j+1][i]-V[k][j-1][i])/dy+0.5*(W[k+1][j][i]-W[k-1][j][i])/dz;
+		Divg[k][j][i] = dUdx[k][j][i]+dVdy[k][j][i]+dWdz[k][j][i];
+		Divg_Sum+=fabs(Divg[k][j][i]);
+		if ((fabs(Divg[k][j][i])-Divg_Max)>1.e-20) Divg_Max=fabs(Divg[k][j][i]);
+		if ((fabs(Divg[k][j][i])-Divg_Min)<1.e-20) Divg_Min=fabs(Divg[k][j][i]);
+	}
+
+	printf("the Maximum Divergence is %le \n", Divg_Max);
+	printf("the Minimum Divergence is %le \n", Divg_Min);
+	printf("the Average Divergence is %le \n", Divg_Sum/(Nx*Ny*Nz));
+	
+	char filen[80];
+	sprintf(filen, "Turbulence%06d.plt", 0);
+
+	INTEGER4 I, Debug, VIsDouble, DIsDouble, III, IMax, JMax, KMax;
+	VIsDouble = 0;
+	DIsDouble = 0;
+	Debug = 0;
+
+	double SolTime = 0.0;
+	INTEGER4 StrandID = 0; /* StaticZone */	
+	INTEGER4 ParentZn = 0;	
+	INTEGER4 TotalNumFaceNodes = 1; /* Not used for FEQuad zones*/
+	INTEGER4 NumConnectedBoundaryFaces = 1; /* Not used for FEQuad zones*/
+	INTEGER4 TotalNumBoundaryConnections = 1; /* Not used for FEQuad zones*/
+	INTEGER4 FileType = 0;
+
+
+	
+	/*I = TECINI112((char*)"Flow", (char*)"X Y Z U V W U_i V_i W_i Divg_k Divg", filen, (char*)".", &FileType, &Debug, &VIsDouble);
+
+	INTEGER4	ZoneType=0, ICellMax=0, JCellMax=0, KCellMax=0;
+	INTEGER4	IsBlock=1, NumFaceConnections=0, FaceNeighborMode=0;
+	INTEGER4    ShareConnectivityFromZone=0;
+	INTEGER4	LOC[40] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}; // 1 is cell-centered 0 is node centered 
+		
+
+	I = TECZNE112((char*)"Zone 1",
+                        &ZoneType,      // Ordered zone 
+                        &Nx,
+                        &Ny,
+                        &Nz,
+                        &ICellMax,
+                        &JCellMax,
+                        &KCellMax,
+                        &SolTime,
+                        &StrandID,
+			&ParentZn,
+			&IsBlock,
+			&NumFaceConnections,
+			&FaceNeighborMode,
+			&TotalNumFaceNodes,
+			&NumConnectedBoundaryFaces,
+			&TotalNumBoundaryConnections,
+			NULL,
+			LOC,
+			NULL,
+			&ShareConnectivityFromZone);
+
+	III = Nx*Ny*Nz;
+	
+	float *x;
+	x = new float [III];
+		
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = X[i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Y[j];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Z[k];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = U[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = V[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = W[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = U_i[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = V_i[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = W_i[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Divg_k[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	for (k=0; k<Nz; k++)
+	for (j=0; j<Ny; j++)
+	for (i=0; i<Nx; i++) {
+		x[k* Nx*Ny + j*Nx + i] = Divg[k][j][i];
+	}
+	I = TECDAT112(&III, &x[0], &DIsDouble);
+
+	I = TECEND112();*/
+
+	free(Kx);
+	free(Ky);
+	free(Kz);
+//	free(X);
+//	free(Y);
+//	free(Z);
+
+	for(k=0;k<Nz;k++) 
+	for(j=0;j<Ny;j++) {
+//		free(U[k][j]);
+//		free(V[k][j]);
+//		free(W[k][j]);
+
+		free(U_i[k][j]);
+		free(V_i[k][j]);
+		free(W_i[k][j]);
+
+		free(n1_Gauss[k][j]);
+		free(n2_Gauss[k][j]);
+		free(n3_Gauss[k][j]);
+
+		free(Divg_k[k][j]);
+		free(Divg[k][j]);
+
+
+		free(dUdx[k][j]);
+		free(dVdy[k][j]);
+		free(dWdz[k][j]);
+
+		free(dUdx_i[k][j]);
+		free(dVdy_i[k][j]);
+		free(dWdz_i[k][j]);
+
+	}
+
 
 	fftw_free(CKu);
 	fftw_free(CKu_o);
